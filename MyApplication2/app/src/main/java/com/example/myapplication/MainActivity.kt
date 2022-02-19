@@ -74,17 +74,23 @@ class MainActivity : ComponentActivity(), SensorEventListener {
             var xbs=axisY.toString()
             var xcs=axisZ.toString()
             var gyrov = xas+"i "+xbs+"j "+xcs+"k"
+            /*
             disString.add(0,"$xas")
             disString.add(1,"$xbs")
             disString.add(2,"$xcs")
+            */
+
             Log.d("sensorchaged gyrov","$gyrov")
+
        //     Log.d("sensorchaged disString","$disString")
             //Greeting(name = gyrov)
             setContent {
                 MyApplicationTheme {
 //                    MyApp(arrayListOf("inside","override"))
                     MyApp(arrayListOf("$gyrov"))
-                    Log.d("inside override","$disString[0]")
+                    //card("$gyrov")
+                    //Log.d("inside override","$disString[0]")
+                    Log.d("sensor type","${event.sensor.name}")
                 }
             }
             //call a function which has setcontent
@@ -180,12 +186,39 @@ private fun Greeting(name: String) {
         }
     }
 }
+@Composable
+private fun card(name: String) {
 
+   // val expanded = remember { mutableStateOf(false) }
+
+ //   val extraPadding = if (expanded.value) 48.dp else 0.dp
+    val extraPadding=0.dp
+    Surface(
+        color = MaterialTheme.colors.primary,
+        modifier = Modifier.padding(vertical = 4.dp, horizontal = 8.dp)
+    ) {
+        Row(modifier = Modifier.padding(24.dp)) {
+            Column(modifier = Modifier
+                .weight(1f)
+                .padding(bottom = extraPadding)
+            ) {
+   //             Text(text = "Hello, ")
+                Text(text = name)
+            }
+     /*       OutlinedButton(
+                onClick = { expanded.value = !expanded.value }
+            ) {
+                Text(if (expanded.value) "Show less" else "Show more")
+            }*/
+        }
+    }
+}
 @Preview(showBackground = true, widthDp = 320)
 @Composable
 fun DefaultPreview() {
     MyApplicationTheme {
         Greetings(arrayListOf("Nallani","Raghav"))
+        card("yeah this one too")
     }
 }
 
