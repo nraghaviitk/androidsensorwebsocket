@@ -17,6 +17,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.Observer
 import com.example.myapplication.ui.theme.MyApplicationTheme
 import org.java_websocket.client.WebSocketClient
 import org.java_websocket.handshake.ServerHandshake
@@ -28,6 +29,10 @@ import com.squareup.moshi.Moshi
 import okhttp3.*
 import okio.ByteString
 import java.util.concurrent.TimeUnit
+import com.example.myapplication.SensordataViewModel
+import kotlinx.coroutines.*
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.channels.consumeEach
 
 
 class MainActivity : ComponentActivity(), SensorEventListener {
@@ -46,9 +51,15 @@ class MainActivity : ComponentActivity(), SensorEventListener {
     private val accelerometerReading = FloatArray(3)
     private val magnetometerReading = FloatArray(3)
 
+    //Channel set up for sending events from main to dispachers
+    private val scope = CoroutineScope(Dispatchers.Default)
+    private val events = Channel<SensorEvent>(100)
+
     private val rotationMatrix = FloatArray(9)
     private val orientationAngles = FloatArray(3)
     val WEB_SOCKET_URL = "ws://192.168.1.8:3000/"
+    private val sensorvm=SensordataViewModel()
+
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -69,29 +80,39 @@ class MainActivity : ComponentActivity(), SensorEventListener {
         val request = Request.Builder().url(WEB_SOCKET_URL).build()
         val wsListener = EchoWebSocketListener()
         val webSocket = client.newWebSocket(request, wsListener)
-
-        setContent {
-            MyApplicationTheme {
-                //    Log.d("oncreate","$disString")
-                // A surface container using the 'background' color from the theme
-                //if(disString!=null) {
-                //       if(disString!=null) {
-                //     MyApp(disString)
-                //}else{
-//                MyApp(arrayListOf("Nallani","Raghav",disString.get(0),disString.get(1),disString.get(2)))
-                MyApp(arrayListOf("Nallani", "Raghav"), "Gravity")
-                //  Log.d("oncreate disString","$disString")
-                //MyApp(disString)
-                //}
-                for (i in deviceSensors) {
-                    //      Log.d("we have","${i.name}")
-                    //     Log.d("type","${i.type}")
-                    //          Log.d("id","${i.id}")
+        val rmsobserve =Observer<Float> { rmsangle ->
+            if (rmsangle > 2.0) {
+                val espdata = "{" + "\"0\": \"0\",\"1\":\"${sensorvm.azimuth.value.toString()}\"" + "}"
+                webSocket.send(espdata)
+            }
 
 
+            setContent {
+                MyApplicationTheme {
+                    //  MyApp(arrayListOf("Nallani","Raghav",disString.get(0),disString.get(1),disString.get(2)))
+                    MyApp(
+                        arrayListOf(
+                            sensorvm.azimuth!!.value.toString(),
+                            sensorvm.pitch!!.value.toString(),
+                            sensorvm.roll!!.value.toString()
+                        ),
+                        sensorvm.eventid.value.toString()
+                    )
+                    //  Log.d("oncreate disString","$disString")
+                    //MyApp(disString)
+                    //}
+                    for (i in deviceSensors) {
+                        //      Log.d("we have","${i.name}")
+                        //     Log.d("type","${i.type}")
+                        //          Log.d("id","${i.id}")
+
+
+                    }
                 }
             }
         }
+        sensorvm.rmsangle.observe(this,rmsobserve)
+
     }
 
 
@@ -124,79 +145,7 @@ class MainActivity : ComponentActivity(), SensorEventListener {
         sensorManager.unregisterListener(this,accse)
 
     }
-    /*
-    private fun initWebSocket() {
-        val coinbaseUri: URI? = URI(WEB_SOCKET_URL)
 
-        createWebSocketClient(coinbaseUri)
-
-        val socketFactory: SSLSocketFactory = SSLSocketFactory.getDefault() as SSLSocketFactory
-        webSocketClient.setSocketFactory(socketFactory)
-        webSocketClient.connect()
-    }
-    private fun createWebSocketClient(coinbaseUri: URI?) {
-        Log.d("createws called","websoc create")
-
-        webSocketClient = object : WebSocketClient(coinbaseUri) {
-        //webSocketClient = WebSocketClient(coinbaseUri) {
-
-            override fun onOpen(handshakedata: ServerHandshake?) {
-                Log.d(TAG, "onOpen")
-                subscribe()
-            }
-
-            override fun onMessage(message: String?) {
-                Log.d(TAG, "onMessage: $message")
-                setUpBtcPriceText(message)
-            }
-
-            override fun onClose(code: Int, reason: String?, remote: Boolean) {
-                Log.d(TAG, "onClose")
-                //unsubscribe()
-            }
-
-            override fun onError(ex: Exception?) {
-                Log.e(TAG, "onError: ${ex?.message}")
-            }
-
-        }
-    }
-    private fun setUpBtcPriceText(message: String?) {
-        message?.let {
-            val moshi = Moshi.Builder().build()
-//            val adapter: JsonAdapter<BitcoinTicker> = moshi.adapter(BitcoinTicker::class.java)
-            val adapter: JsonAdapter<servermessage> = moshi.adapter(servermessage::class.java)
-
-            val serverdata = adapter.fromJson(message)
-            setContent {
-                MyApplicationTheme {
-                    MyApp(arrayListOf("${serverdata!!.message}"),serverdata!!.name)
-             //       Log.d("sensor name","${serverdata!!.name}")
-              //      Log.d("sensor type","${serverdata!!.message}")
-                }
-            }
-          //  runOnUiThread { btc_price_tv.text = "1 BTC: ${bitcoin?.price} €" }
-          //  runOnUiThread { gyrotext.text = "${gravity}" }
-
-        }
-    }
-    private fun subscribe() {
-        /*webSocketClient.send(
-            "{\n" +
-                    "    \"type\": \"subscribe\",\n" +
-                    "    \"channels\": [{ \"name\": \"ticker\", \"product_ids\": [\"BTC-EUR\"] }]\n" +
-                    "}"
-        ) */
-        webSocketClient.send(
-            "{"+"\"Android\": \"0\""+"}"
-                )
-    }
-    companion object {
-        //const val WEB_SOCKET_URL = "wss://ws-feed.pro.coinbase.com"
-        const val WEB_SOCKET_URL = "ws://192.168.1.8:3000/"
-
-        const val TAG = "Coinbase"
-    }*/
     fun lowpass(input:FloatArray, output:FloatArray):FloatArray{
      /*   Log.d("inlowpass input size","${input.size}")
         Log.d("inlowpass output size","${output.size}")
@@ -212,107 +161,87 @@ class MainActivity : ComponentActivity(), SensorEventListener {
         return output}
     }
     override fun onSensorChanged(event: SensorEvent?) {
-        var gyrov:String=""
-        var lightv : String=""
-        var gravv:String=""
-        if (event!!.sensor.type == Sensor.TYPE_ACCELEROMETER) {
-            System.arraycopy(event.values, 0, accelerometerReading, 0, accelerometerReading.size)
-        } else if (event!!.sensor.type == Sensor.TYPE_MAGNETIC_FIELD) {
-            System.arraycopy(event!!.values, 0, magnetometerReading, 0, magnetometerReading.size)
-        }
-/*
-    for (i in 0..2){
-        Log.d("magreading","${magnetometerReading[i]}")
-        Log.d("accreading","${accelerometerReading[i]}")
-        }*/
-    // Compute the three orientation angles based on the most recent readings from
-    // the device's accelerometer and magnetometer.
-    fun updateOrientationAngles() {
-        // Update rotation matrix, which is needed to update orientation angles.
-        SensorManager.getRotationMatrix(
-            rotationMatrix, null,
-            accelerometerReading,
-            magnetometerReading
-        )
-/*
-        for (i in 0..8){
-            Log.d("rotmatrix${i}","${rotationMatrix[i]}")
-        }
-        // "rotationMatrix" now has up-to-date information.
-        */
-        SensorManager.getOrientation(rotationMatrix, orientationAngles)
-
-        // "orientationAngles" now has up-to-date information.
+        event?.let { offer(it) }
+    //    process()
     }
-        lateinit var theta:String
-        if(accelerometerReading!=null && magnetometerReading!=null) {
-            updateOrientationAngles()
-            //var theta : String()
-            var theta0 = orientationAngles[0].toString()
-            var theta1 = orientationAngles[1].toString()
-            var theta2 = orientationAngles[2].toString()
-            theta = theta0 + "i " + theta1 + "j " + theta2 + "k"
-          //  Log.d("orientation angles:", "${theta}")
-        }else{
-             theta = "not done yet"
-        }
+//    private fun offer(event: SensorEvent) = runBlocking { events.send(event)
+    //process()
+    private fun offer(event: SensorEvent) {
+   // scope.launch(Dispatchers.Default) {
+    runBlocking {
 
- /*   if(event!=null && event.sensor.type==Sensor.TYPE_GYROSCOPE) {
-            var axisX: Float = event.values[0]
-//            gyrovalues[0]=axisX
+        events.send(event)
+    }
 
-            var axisY: Float = event.values[1]
-  //          gyrovalues[1]=axisY
-            var axisZ: Float = event.values[2]
-    //        gyrovalues[2]=axisZ
-            var xas=axisX.toString()
-            var xbs=axisY.toString()
-            var xcs=axisZ.toString()
-            gyrov = "gyro:"+xas+"i "+xbs+"j "+xcs+"k"
-            Log.d("sensorchaged gyrov","$gyrov")
-            gyrovalues=lowpass(event.values.clone(),gyrovalues)
-            val lpstring=gyrovalues[0].toString()+" "+gyrovalues[1].toString()
-            Log.d("Lowpassed","${lpstring}")
-            //call a function which has setcontent
-            // and adds the string or updates a list and shows the value
-//        } else if(event!=null && event.sensor.type==65604){
-        } else if(event!=null && event.sensor.type==Sensor.TYPE_LIGHT){
+    scope.launch {
 
-            var lux = event.values[0].toString()
-            lightv="lightsensor:"+lux
-            Log.d("sensorchaged lightv","$lightv")
-        }else if(event!=null && event.sensor.type==Sensor.TYPE_GRAVITY){
+    //fun process() = scope.launch {
+        events.consumeEach { event ->
+            // Do something
 
-            var axisX: Float = event.values[0]
-            var axisY: Float = event.values[1]
-            var axisZ: Float = event.values[2]
-            var xas=axisX.toString()
-            var xbs=axisY.toString()
-            var xcs=axisZ.toString()
-            gravv = "grav:"+xas+"i "+xbs +"j "+xcs+"k"
-            Log.d("sensorchaged gravv","$gravv")
-        }
-   */     setContent {
-            MyApplicationTheme {
-//                    MyApp(arrayListOf("inside","override"))
-//                MyApp(arrayListOf("$gyrov","$lightv","$gravv"))
-                //if(gyrovalues!=event?.values?.clone()){
-               // MyApp(arrayListOf("$lightv","$gravv","$gyrov"),event!!.sensor.name)
-                MyApp(arrayListOf("$theta"),event!!.sensor.name)
-                val sockdata="{\"0\":\"${theta}\""
-                //webSocket.send(sockdata)
-
-                //}
-                //card("$gyrov")
-                //Log.d("inside override","$disString[0]")
-            //    Log.d("sensor name","${event?.sensor?.name}")
-            //    Log.d("sensor type","${event?.sensor?.type}")
+            var gyrov: String = ""
+            var lightv: String = ""
+            var gravv: String = ""
+            if (event!!.sensor.type == Sensor.TYPE_ACCELEROMETER) {
+                System.arraycopy(
+                    event.values,
+                    0,
+                    accelerometerReading,
+                    0,
+                    accelerometerReading.size
+                )
+            } else if (event!!.sensor.type == Sensor.TYPE_MAGNETIC_FIELD) {
+                System.arraycopy(
+                    event!!.values,
+                    0,
+                    magnetometerReading,
+                    0,
+                    magnetometerReading.size
+                )
             }
-        }
-    //make the string here only and
-    // addit to the list to pass it to composable where it is iterated.
-    }
 
+            fun updateOrientationAngles() {
+                // Update rotation matrix, which is needed to update orientation angles.
+                SensorManager.getRotationMatrix(
+                    rotationMatrix, null,
+                    accelerometerReading,
+                    magnetometerReading
+                )
+
+                SensorManager.getOrientation(rotationMatrix, orientationAngles)
+
+
+            }
+
+            lateinit var theta: String
+            if (accelerometerReading != null && magnetometerReading != null) {
+                updateOrientationAngles()
+                //var theta : String()
+                var theta0 = orientationAngles[0].toString()
+                var theta1 = orientationAngles[1].toString()
+                var theta2 = orientationAngles[2].toString()
+                theta = theta0 + "i " + theta1 + "j " + theta2 + "k"
+                 // Log.d("orientation angles:", "${theta}")
+
+            } else {
+                theta = "not done yet"
+            }
+/*
+            sensorvm.updateAngle(
+                orientationAngles,
+                event.timestamp.toFloat(),
+                event.sensor.name.toString()
+            )
+  */
+            sensorvm.rms(orientationAngles, event.timestamp.toFloat(),event.sensor.name.toString())
+
+
+//make the string here only and
+// addit to the list to pass it to composable where it is iterated.
+
+        }
+    }
+}
     override fun onAccuracyChanged(sensor: Sensor?, p1: Int) {
 
     }
@@ -326,15 +255,20 @@ private class EchoWebSocketListener : WebSocketListener() {
 
 //        webSocket.send("What's up ?")
         // webSocket.send(ByteString.decodeHex("deadbeef"))
-        webSocket.close(NORMAL_CLOSURE_STATUS, "Goodbye !")
+        //webSocket.close(NORMAL_CLOSURE_STATUS, "Goodbye !")
     }
 
     override fun onMessage(webSocket: WebSocket, text: String) {
         output("Receiving : " + text!!)
     }
 
-    override fun onMessage(webSocket: WebSocket, bytes: ByteString) {
-        output("Receiving bytes : " + bytes!!.hex())
+    //override fun onMessage(webSocket: WebSocket, bytes: ByteString) {
+      //  output("Receiving bytes : " + bytes!!.hex())
+    //}
+
+    fun onMessage(webSocket: WebSocket, sermess:servermessage) {
+        output("message:"+sermess!!.message!!.toString()+"sender:"+sermess!!.name!!.toString())
+//        output("sender : " + sermess!!.name!!.toString())
     }
 
     override fun onClosing(webSocket: WebSocket, code: Int, reason: String) {
